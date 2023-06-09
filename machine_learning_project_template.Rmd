@@ -1,0 +1,756 @@
+---
+title: "Machine Learning Project"
+---
+
+
+**Your Name**: Sahith
+
+
+
+
+```{r warning = FALSE, message = FALSE}
+# Suppress dplyr summarise grouping warning messages
+options(dplyr.summarise.inform = FALSE)
+
+library(tidyverse)
+library(tidymodels)
+library(discrim)
+library(vip)
+
+credit_card_df <- readRDS(url('https://gmubusinessanalytics.netlify.app/data/credit_card_df.rds'))
+
+```
+
+
+
+# Data Analysis
+
+
+
+
+
+# Question 1
+
+
+**Question**: Is there any relationship between Customer status, Marital Status and Income?
+
+
+**Answer**: Probably, the customers who are active have more income (median income is considered here) than the customers who closed their accounts. So, lower income might be the reason why people are closing their accounts. And, there's no particular trend is observed in the marital status of the customers when both cases (closed_account and active) are considered. The number of customers who are married are the highest and then comes customers who are single and then divorced in both the cases (closed or aactive accounts). This can be observed from the summary table or the Stacked Bar Chart below.
+
+
+```{r}
+
+marital_income <- credit_card_df %>%
+  group_by(customer_status, marital_status) %>%
+  summarise(n_customers = n(),
+            min_income = min(income),
+            avg_income = mean(income),
+            median_income = median(income),
+            max_income = max(income))
+marital_income
+
+```
+
+```{r}
+
+ggplot(data = marital_income, mapping = aes(x = marital_status, y = median_income, fill = customer_status)) + 
+  geom_col() +
+  facet_wrap(~customer_status) +
+  labs(title = 'Bar Chart of Customers Marital Status Vs Income',
+       x = 'Customers Marital Status',
+       y = 'Customers Median Income')
+
+```
+
+```{r}
+
+ggplot(data = marital_income, mapping = aes(x = marital_status, y = n_customers, fill = customer_status)) + 
+  geom_col() +
+  labs(title = 'Stacked Bar Chart of \nCustomers Marital Status vs no. of customers \nclosed/active accounts',
+       x = 'Customers Marital Status',
+       y = 'No. of customers')
+
+```
+
+
+
+# Question 2
+
+
+**Question**: Is there any relationship between Customer status, age and income?
+
+
+**Answer**: There seems to be no effect on age and income of the customers who closed or still have active accounts. This can be inferred from the scatter plot or the summary table age_income by considering min, median and max values of age and income.
+
+
+```{r}
+
+ggplot(data = credit_card_df, mapping = aes(x = age, y = income, color = customer_status)) +
+      geom_point() +
+      facet_wrap(~ customer_status, nrow = 1)
+
+```
+
+```{r}
+
+age_income <- credit_card_df %>%
+  select(customer_status, age, income) %>%
+  group_by(customer_status) %>%
+  summarise(n_customers = n(),
+            min_age = mean(age),
+            median_age = median(age),
+            max_age = max(age),
+            min_income = min(income),
+            median_income = median(income),
+            max_income = max(income))
+age_income
+
+```
+
+
+
+# Question 3
+
+
+**Question**: Is there any relationship between Customer status, card type and utilization rate?
+
+
+**Answer**: From the boxplot below, we can see that customers who are currently maintaining their accounts have good utilization rate (median utilization rate is considered as there are outliers) when compared to customers who closed their accounts. Though there are outliers in the closed_account type, the median utilization rate is 0 which is very low when compared with active customers median utilization rate. Also, customers who held blue card mostly closed their accounts (1497). This can be seen in utilization_card summary table.
+
+
+```{r}
+
+ggplot(credit_card_df, aes(x = card_type, y = utilization_ratio, fill = customer_status)) +
+  geom_boxplot() + 
+  facet_wrap(~ customer_status) +
+  labs(title = "Relationship between Customer Status, \nUtilization Ratio and card type",
+       x = "Card type",
+       y = "Utilization Ratio")
+
+```
+
+```{r}
+
+utilization_card <- credit_card_df %>%
+  group_by(customer_status, card_type) %>%
+  summarise(n_customers = n(),
+            min_utility = min(utilization_ratio),
+            median_utility = median(utilization_ratio),
+            max_utility = max(utilization_ratio)) %>%
+  arrange(desc(n_customers)) %>%
+  arrange(median_utility)
+utilization_card
+
+```
+
+
+# Question 4
+
+
+**Question**: Is there any relationship between Customer status, months inactive last year and employment status?
+
+
+**Answer**: From the histogram generated, we can observe that customers who closed their accounts are mostly from the part time employment status and customers who are still active are doing full time jobs. And when we compare both the customer accounts (closed/active), we can see that there's no particular trend when customers are closing their accounts because people who are inactive for 0-3 months are more in every case than 4-6 months of inactiveness. 
+
+
+```{r}
+
+ggplot(data = credit_card_df, mapping = aes(x = months_inactive_last_year, fill = customer_status)) +
+       geom_histogram( color = "white", bins = 7) + 
+       facet_grid(customer_status ~ employment_status) +
+       labs(title = "Distribution of months inactive last year",
+            x = "Months inactive last year",
+            y = "Number of Customers")
+
+```
+
+```{r}
+
+inactive_status <- credit_card_df %>%
+  group_by(customer_status, employment_status, months_inactive_last_year) %>%
+  summarise(n_customers = n()) %>%
+  arrange(desc(n_customers))
+
+```
+
+
+# Question 5
+
+
+**Question**: Is there any relationship between Customer status, no. of transactions and total spend last year?
+
+
+**Answer**: Yes, there is a relation among these three variables. Customers who did less transactions and spent less last year closed their accounts. This can be analyzed from the below summary table.
+
+
+```{r}
+
+spend_status <- credit_card_df %>%
+  group_by(customer_status) %>%
+  summarise(n_customers = n(),
+            avg_transaction_lastyear = mean(transactions_last_year),
+            median_transaction_lastyear = median(transactions_last_year),
+            avg_spend_last_year = mean(total_spend_last_year),
+            median_spend_last_year = median(total_spend_last_year))
+
+```
+
+
+# Question 6
+
+
+**Question**: Is there any relationship between Customer status, credit limit, Spend ratio and Transaction ratio from Q4 to Q1?
+
+
+**Answer**: Yes. there is a relation among all these variables. The values for the credit limit, total spend ratio from Q4 to Q1 and total transaction ratio from Q4 to Q1 are low for the customers who closed their accounts when compared with the customers who are still active. This can be inferred from the below summary table.
+
+
+```{r}
+
+q4_q1_status <- credit_card_df %>%
+  group_by(customer_status) %>%
+  summarise(n_customers = n(),
+            avg_creditlimit = mean(credit_limit),
+            median_creditlimit = median(credit_limit),
+            avg_transactionratio_q4_q1 = mean(transaction_ratio_q4_q1),
+            median_transactionratio_q4_q1 = median(transaction_ratio_q4_q1),
+            avg_spendratio_q4_q1 = mean(spend_ratio_q4_q1),
+            median_spendratio_q4_q1 = median(spend_ratio_q4_q1))
+
+```
+
+
+# Question 7
+
+
+**Question**: Is there any relationship between income, card type and its credit limit on the customers closing their accounts?
+
+
+**Answer**: Yes, customers who held blue card are more prone to close their accounts as their income and credit limit is less when compared with other card type holders.
+
+
+```{r}
+
+cardtype_limit <- credit_card_df %>%
+  filter(customer_status == "closed_account") %>%
+  group_by(customer_status, card_type) %>%
+  summarise(n_customers = n(),
+            avg_creditlimit = mean(credit_limit),
+            avg_income = mean(income)) %>%
+  arrange(avg_creditlimit)
+cardtype_limit
+
+```
+
+
+
+
+# Machine Learning
+
+
+
+
+
+
+
+```{r}
+
+# to set the random seed
+set.seed(399)
+
+# to create a data split object
+card_data_split <- initial_split(credit_card_df, 
+                                 prop = 0.75, 
+                                 strata = customer_status)
+card_data_split
+
+# to generate a training data frame
+card_training_data <- card_data_split %>% 
+  training()
+
+# to view training data frame results
+card_training_data
+
+# to generate a testing data frame
+card_testing_data <- card_data_split %>%
+  testing()
+
+# to view testing data frame results
+card_testing_data
+
+# checking no. of rows in training and testing datasets
+nrow(card_training_data)
+nrow(card_testing_data)
+
+```
+
+```{r}
+
+# feature engineering pipeline
+
+# to specify a recipe
+card_recipe <- recipe(customer_status ~ .,
+                      data = card_training_data)
+
+# to pass recipe object to the summary function
+summary(card_recipe)
+
+# to normalize
+card_recipe %>% 
+  step_normalize(all_numeric(), -all_outcomes()) %>% 
+  prep(training = card_training_data) %>% 
+  bake(new_data = NULL)
+
+# to specify a full recipe removing highly correlated predictors, skewness and centre and scale all num predictors
+card_numeric <- recipe(customer_status ~ .,
+                       data = card_training_data) %>%
+  step_corr(all_numeric(), -all_outcomes()) %>%
+  step_YeoJohnson(all_numeric(), -all_outcomes()) %>%
+  step_normalize(all_numeric(), -all_outcomes()) %>%
+  prep(training = card_training_data)
+
+# to apply the transformations to our training and testing data with bake()
+processed_card_training <- card_numeric %>%
+  bake(new_data = NULL)
+
+processed_card_test <- card_numeric %>%
+  bake(new_data = card_testing_data)
+
+# to view training results
+processed_card_training
+
+# to view testing results
+processed_card_test
+
+# to process categorical variables
+card_recipe %>%
+  step_dummy(education, marital_status, employment_status, card_type) %>% 
+  prep(training = card_training_data) %>% 
+  bake(new_data = NULL)
+
+# to create feature engineering pipeline on card_training_data
+card_transformations <- recipe(customer_status ~ .,
+                               data = card_training_data) %>% 
+  # Transformation steps
+  step_YeoJohnson(all_numeric(), -all_outcomes()) %>%
+  step_normalize(all_numeric(), -all_outcomes()) %>% 
+  step_dummy(all_nominal(), -all_outcomes()) %>% 
+  # Train transformations on card_training_data
+  prep(training = card_training_data)
+
+# to apply to card_testing_data
+card_transformations %>% 
+  bake(new_data = card_testing_data)
+
+```
+
+
+
+
+# Model 1
+
+```{r}
+
+# to specify a logistic regression model
+logistic_model <- logistic_reg() %>% 
+  set_engine('glm') %>%         # to set the engine
+  set_mode('classification')    # to set the mode
+
+# to fit to the training data
+card_logistic_fit <- logistic_model %>%
+  fit(customer_status ~ .,
+      data = card_training_data)
+
+# to print the model fit object
+card_logistic_fit
+
+# to obtain predicted categories
+predictions_categories <- predict(card_logistic_fit,
+                                  new_data = card_testing_data,
+                                  type = 'class')
+predictions_categories
+
+# to obtain estimated probabilities
+predictions_probabilities <- predict(card_logistic_fit,
+                                     new_data = card_testing_data,
+                                     type = 'prob')
+predictions_probabilities
+
+# to combine the results
+test_results <- card_testing_data %>% select(customer_status) %>%
+  bind_cols(predictions_categories) %>% 
+  bind_cols(predictions_probabilities)
+test_results
+
+```
+
+```{r}
+
+# to explore performance metrics
+
+# confusion matrix
+conf_mat(test_results,
+         truth = customer_status, 
+         estimate = .pred_class)
+
+# accuracy
+accuracy(test_results, 
+         truth = customer_status, 
+         estimate = .pred_class) # 0.843
+
+# sensitivity
+sens(test_results, 
+     truth = customer_status,
+     estimate = .pred_class)     # 0.830 
+
+# specificity
+spec(test_results, 
+     truth = customer_status,
+     estimate = .pred_class)     # 0.853
+
+```
+
+```{r}
+
+# to create a custom metric set
+my_metrics <- metric_set(accuracy, sens, spec)
+
+# to calculate metrics using test results
+my_metrics(test_results,
+           truth = customer_status,
+           estimate = .pred_class)
+
+# confusion matrix
+conf_mat(test_results,
+         truth = customer_status,
+         estimate = .pred_class) %>% 
+  summary()
+
+```
+
+```{r}
+
+# confusion matrix
+conf_mat(test_results,
+         truth = customer_status,
+         estimate = .pred_class) %>% 
+  autoplot(type = 'mosaic')
+
+```
+
+```{r}
+
+# metrics across thresholds
+threshold_card <- test_results %>% 
+  roc_curve(truth = customer_status, 
+            .pred_closed_account)
+
+# to view results
+threshold_card
+
+# ROC curve
+threshold_card %>% 
+  autoplot()
+
+# Area under the ROC curve
+roc_auc(test_results,
+        truth = customer_status, 
+        .pred_closed_account)         # 0.922
+
+# specifity
+spec(test_results,
+     truth = customer_status,
+     estimate = .pred_class)          # 0.853
+
+```
+
+
+
+
+# Model 2
+
+```{r}
+
+# KNN Model
+
+### to create folds for cross validation on the training data set
+## These will be used to tune model hyperparameters
+set.seed(399)
+customer_status_folds <- vfold_cv(card_training_data, v = 5)
+
+# to specify a KNN Model
+knn_model <- nearest_neighbor(neighbors = tune()) %>% 
+  set_engine('kknn') %>%        # to set engine
+  set_mode('classification')    # to set mode
+
+# to create a workflow
+knn_wf <- workflow() %>% 
+  add_model(knn_model) %>% 
+  add_recipe(card_transformations)
+
+# hyper parameter tuning
+
+## to create a grid of hyperparameter values to test
+k_grid <- tibble(neighbors = c(10, 20, 30, 50, 75, 100, 125, 150))
+
+# to view grid
+k_grid
+
+## to tune  workflow
+set.seed(399)
+
+knn_tuning <- knn_wf %>% 
+  tune_grid(resamples = customer_status_folds,
+            grid = k_grid)
+
+## to show the top 5 best models based on roc_auc metric
+knn_tuning %>% show_best('roc_auc')
+
+## to select best model based on roc_auc
+best_k <- knn_tuning %>% 
+  select_best(metric = 'roc_auc')
+
+## to view model
+best_k
+
+## to finalize workflow by adding the best performing model
+final_knn_wf <- knn_wf %>% 
+  finalize_workflow(best_k)
+
+# to train and evaluate with last_fit()
+last_fit_knn <- final_knn_wf %>% 
+  last_fit(split = card_data_split)
+
+# ROC curve
+knn_predictions <- last_fit_knn %>% 
+  collect_predictions()
+
+# to view
+knn_predictions
+
+# to make an ROC plot
+knn_predictions %>% 
+  roc_curve(truth = customer_status, 
+            estimate = .pred_closed_account) %>% 
+  autoplot()
+
+# area under ROC curve
+roc_auc(knn_predictions,
+        truth = customer_status, 
+        .pred_closed_account)            # 0.958
+
+```
+
+```{r}
+
+# confusion matrix
+conf_mat(knn_predictions, 
+         truth = customer_status, 
+         estimate = .pred_class)
+
+# specificity
+spec(knn_predictions,
+     truth = customer_status, 
+     estimate = .pred_class)          # 0.905
+
+# sensitivity
+sens(knn_predictions,
+     truth = customer_status, 
+     estimate = .pred_class)          # 0.872
+
+```
+
+
+
+
+
+# Model 3
+
+```{r}
+
+# to specify a random forest model
+rf_model <- rand_forest(mtry = tune(),
+                        trees = tune(),
+                        min_n = tune()) %>% 
+  set_engine('ranger', importance = "impurity") %>% # to set engine
+  set_mode('classification')                        # to set mode
+
+# to build recipe
+rf_card_recipe <- recipe(customer_status ~ .,
+                         data = card_training_data) %>% 
+  step_corr(all_numeric(), threshold = 0.80) %>% 
+  step_dummy(all_nominal(), -all_outcomes())
+
+# to view recipe
+rf_card_recipe
+
+# to create a workflow
+rf_workflow <- workflow() %>% 
+  add_model(rf_model) %>% 
+  add_recipe(rf_card_recipe)
+
+## to create a grid of hyperparameter values to test
+set.seed(399)   # to set the seed
+rf_grid <- grid_random(mtry() %>% 
+                         range_set(c(2, 5)),
+                       trees(),
+                       min_n(),
+                       size = 15)
+
+# to view grid
+rf_grid
+
+# to tune hyperparameters with tune_grid()
+
+## to tune random forest workflow
+set.seed(399)   # to set the seed
+rf_tuning <- rf_workflow %>% 
+  tune_grid(resamples = customer_status_folds,
+            grid = rf_grid)
+
+## to show the top 5 best models based on roc_auc metric
+rf_tuning %>% 
+  show_best('roc_auc')
+
+## to select best model based on roc_auc
+best_rf <- rf_tuning %>% 
+  select_best(metric = 'roc_auc')
+
+# View the best parameters
+best_rf
+
+# to finalise the workflow
+final_rf_workflow <- rf_workflow %>% 
+  finalize_workflow(best_rf)
+
+# to fit the model
+rf_wf_fit <- final_rf_workflow %>% 
+  fit(data = card_training_data)
+
+# to extract trained model from our workflow
+rf_fit <- rf_wf_fit %>% 
+  extract_fit_parsnip()
+
+# to train and evaluate with last_fit()
+rf_last_fit <- final_rf_workflow %>% 
+  last_fit(card_data_split)
+
+# ROC curve
+rf_last_fit %>% 
+  collect_predictions() %>% 
+  roc_curve(truth  = customer_status, 
+            estimate = .pred_closed_account) %>% 
+  autoplot()
+
+# to collect predictions
+rf_predictions <- rf_last_fit %>% 
+  collect_predictions()
+
+# to collect metrics
+rf_last_fit %>% 
+  collect_metrics()          # accuracy = 0.902, roc_auc = 0.969
+
+```
+
+```{r}
+
+# confusion matrix
+conf_mat(rf_predictions, 
+         truth = customer_status, 
+         estimate = .pred_class)
+
+# sensitivity
+sens(rf_predictions, 
+     truth = customer_status, 
+     estimate = .pred_class)          # 0.883
+
+# specificity
+spec(rf_predictions, 
+     truth = customer_status, 
+     estimate = .pred_class)          # 0.918
+
+# variable importance graph
+vip(rf_fit)
+
+```
+
+
+
+
+# Summary of Results
+
+
+
+
+> Banks must maintain records on customers inorder to track their account status so that it can identify the customers who are more prone to cancel their accounts. The dataset which is given is one of the U.S banks customers data and it has around 4000 records. From the dataset it can be seen that the bank has experienced record levels of customers closing their credit accounts (2092 customers) in the past couple of years and this is leading to declining revenue.
+
+> The problems that the company is trying to solve include:
+
+      >> What are the factors that are associated with customers closing their credit card accounts?
+      >> Is it possible to predict whether a customer will close their account? If so, how accurate are the predictions?
+      >> How many costly errors is the model expected to produce?
+      >> Are there any actions or policies the company can implement to reduce the risk of losing their customers?
+      
+>> These are important to resolve for their future success because it can become better at identifying customers at risk of canceling their accounts to minimize financial losses. In order to maintain profits, banks must maximize the number of customers with credit lines. It is also in their best interests for customers to carry large credit card balances from month-to-month to maximize revenue from interest charges.
+
+> The goal of my analysis is to analyze which factors are affecting customers to close their accounts so that banks can focus on these factors to make customers continue using their accounts.
+
+> The questions which I tried to answer in my analysis are:
+
+      >> Is there any relationship between Customer status, Marital status and Income?
+      >> Is there any relationship between customer status, age and income?
+      >> Is there any relationship between customer status, card type and utilization rate?
+      >> Is there any relationship between customer status, months inactive last year and employment status?
+      >> Is there any relationship between customer status, no. of transactions and total spend last year?
+      >> Is there any relationship between customer status, credit limit, total spend ratio and total transaction ratio from Q4 to Q1
+      >> Is there any relationship between income, card type and its credit limit on the customers closing their accounts?
+      
+      >> These are important to know because banks can focus on these factors and analyze what can be done and where it can improve inorder to continue its customers to use the accounts. 
+      
+> Key findings from my analysis are:
+
+      >> Customers with low income (median income) are more prone to close their accounts.
+      >> Customers with low utilization ratio closed their accounts.
+      >> Customers whose employment status was part time mostly closed the accounts. 
+      >> Customers who did less transactions, spent less, and who has less credit limit closed their accounts.
+      
+> Let us consider all the metrics of three models which I analyzed:
+
+      >> Logistic Regression:
+          >>> Accuracy - 84.3%
+          >>> Sensitivity - 83%
+          >>> Specificity - 85.3%
+          >>> ROC_AUC - 0.922
+          
+      >> KNN Classifier:
+          >>> Sensitivity - 87.2%
+          >>> Specificity - 90.5%
+          >>> ROC_AUC - 0.958
+          
+      >> Random Forest:
+          >>> Accuracy - 90.2%
+          >>> Sensitivity - 88.3%
+          >>> Specificity - 91.8%
+          >>> ROC_AUC - 0.969
+          
+      >> Here, 
+          >>> The sensitivity is a performance metric that calculates the proportion of actual positive cases that the classification model predicted correctly.
+          >>> The specificity is a performance metric that calculates the proportion of actual negative cases that the classification model predicted correctly.
+          >>> The ROC curve is a way to visualize the performance of any classification model. The plot includes the sensitivity on the y-axis and (1 - specificity on the x-axis for all possible probability cut-off values.
+          >>> Another important performance metric is the area under the ROC curve. This metric can be loosely interpreted as a letter grade. In terms of model performance, an area under the ROC value between 0.9 - 1 indicates an “A”, 0.8 - 0.9 a “B”, and so forth. Anything below a 0.6 is an “F” and indicates poor model performance.
+          
+      >> So, from the above metric results, we can say that the Random Forest Model did well when compared to other two models (KNN Classifier and Logistic Regression). The area under the ROC curve is 0.969 and it gets "A" as the range is between 0.9 - 1. The sensitivity and specificity are also more when compared to other two models which is around 88.3% and 91.8% respectively.
+      
+      >> To explain in an intuitive way, if we consider the important variables graph in the random forest model, the variables which are affecting the most are ordered in descending order on the Y-axis. The most affecting variable is transactions_last_year. So, executives at bank can easily identify these variables from the graph and focus on them before a customer closes his/her account.
+      
+> My recommendations to the company are:
+
+      >> Company should focus more on income level before accepting the application of the customer to open the credit account because customers who closed their accounts have less income. Question 1 will justify this recommendation.
+      
+      >> Company should focus on employee status of the customer because most number of customers who were doing part time closed their accounts. Here it can be inferred that when they have jobs they use the accounts and close. So, they won't maintain their accounts for a longer period of time. If company concentrates to open accounts for full time customers it can gain profits in a long time. Question 4 will justify this recommendation.
+      
+      >> Customers who performed less transactions, who spent less, who has less utilization ratio and who has less credit limit are more prone to close their accounts. So, the company should focus more on these variables inorder to maintain their profits. Questions 3, 5 and 6 will justify this recommendation.
+      
+      >> The above recommendations are important for the future of banks to maximize their profits by not loosing their customers otherwise banks can lead to financial loses.
+      
+      
